@@ -27,6 +27,32 @@ function authMiddleware(req, res, next) {
   }
 }
 
+const axios = require("axios");
+
+async function summarizeNote(content) {
+  try {
+    const response = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: "gpt-3.5-turbo",
+        messages: [
+          { role: "user", content: `Summarize this note:\n\n${content}` },
+        ],
+        temperature: 0.7,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        },
+      }
+    );
+    return response.data.choices[0].message.content;
+  } catch (err) {
+    console.error("AI summary error:", err);
+    return ""; // fallback to empty if summary fails
+  }
+}
+
 app.post(
   "/notes",
   authMiddleware,
@@ -46,11 +72,12 @@ app.post(
 
     const userId = req.userId;
     const { title, content } = req.body;
+    const summary = await summarizeNote(content);
 
     try {
       const result = await pool.query(
-        "INSERT INTO notes (title, content, user_id, created_at) VALUES ($1, $2, $3, NOW()) RETURNING *",
-        [title, content, userId]
+        "INSERT INTO notes (title, content, summary, user_id, created_at) VALUES ($1, $2, $3, NOW()) RETURNING *",
+        [title, content, summary, userId]
       );
 
       res
